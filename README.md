@@ -1,6 +1,64 @@
-# Novel Like Game Text Reader
+﻿# Novel Like Game Text Reader
 
 * This is a text reader project based on AI reader and Novel-Like game text processing.
+
+## Story Source Fetcher
+
+Use `get_text.py` to fetch one raw story source from PRTS wiki.
+
+### Command Line
+
+```powershell
+python get_text.py "W2G/BEG" -o beg.txt
+python get_text.py "https://prts.wiki/index.php?title=W2G/BEG&action=edit" -o beg.txt
+```
+
+If `-o` is omitted, `get_text.py` prints the raw source to stdout. `story_reader.py` writes to a `.txt` file by default.
+
+### Python Interface
+
+Other programs can import the fetcher and process the returned text:
+
+```python
+from get_text import fetch_story_text
+
+raw_text = fetch_story_text("W2G/BEG")
+```
+
+`fetch_story_text(source)` accepts a page title, normal wiki URL, or edit-page URL, and returns the raw story source as a `str`.
+
+## Story Picker App
+
+`story_reader.py` is the user-facing program. It loads the story catalog from the wiki, lets the user filter and choose a story, then exports the raw source to a `.txt` file.
+
+### Interactive Mode
+
+```powershell
+python story_reader.py
+```
+
+### List Mode
+
+```powershell
+python story_reader.py --list
+```
+
+### Direct Mode
+
+If you already know the story title or URL, you can still bypass selection:
+
+```powershell
+python story_reader.py "W2G/BEG"
+```
+
+### GUI-ready Functions
+
+Other programs can import these functions from `story_reader.py`:
+
+- `load_story_catalog()` to get the available story list
+- `choose_story_entry()` to reuse the selection logic
+- `default_output_path()` to get the default `.txt` output name
+- `fetch_story_text()` from `get_text.py` to obtain raw source text
 
 ## Commit 规范 [![starline](https://starlines.qoo.monster/assets/qoomon/5dfcdf8eec66a051ecd85625518cfd13@gist)](https://github.com/qoomon/starline)
 
@@ -203,4 +261,8 @@ The `footer` should contain issue references and informations about **Breaking C
 -----
 ## References
 - https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13#file-conventional-commits-cheatsheet-md
+
+
+
+
 
