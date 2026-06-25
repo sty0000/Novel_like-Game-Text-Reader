@@ -1,9 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import html
 import json
 import re
+import socket
 import sys
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,10 @@ DEFAULT_EDIT_URL = "https://prts.wiki/index.php?title={title}&action=edit"
 
 
 class CrawlError(RuntimeError):
+    pass
+
+
+class _FetchTransportError(CrawlError):
     pass
 
 
@@ -54,9 +59,13 @@ def fetch_text(url: str, timeout: int = 20) -> str:
             charset = response.headers.get_content_charset() or "utf-8"
             return response.read().decode(charset, errors="replace")
     except HTTPError as error:
-        raise CrawlError(f"HTTP {error.code} while fetching {url}") from error
+        raise _FetchTransportError(f"HTTP {error.code} while fetching {url}") from error
     except URLError as error:
-        raise CrawlError(f"Network error while fetching {url}: {error.reason}") from error
+        raise _FetchTransportError(f"Network error while fetching {url}: {error.reason}") from error
+    except (TimeoutError, socket.timeout) as error:
+        raise _FetchTransportError(f"Timeout while fetching {url}") from error
+    except OSError as error:
+        raise _FetchTransportError(f"I/O error while fetching {url}: {error}") from error
 
 
 def extract_from_edit_page(html_text: str) -> str:
@@ -78,6 +87,7 @@ def extract_from_api(title: str, api_url: str = DEFAULT_API, timeout: int = 20) 
             "rvslots": "main",
             "rvprop": "content",
             "titles": title,
+            "redirects": "1",
             "format": "json",
             "formatversion": "2",
         }
@@ -116,11 +126,8 @@ def fetch_story_text(source: str, timeout: int = 20, api_url: str = DEFAULT_API)
 
     try:
         return extract_from_api(title, api_url=api_url, timeout=timeout)
-    except Exception:
-        if source.startswith(("http://", "https://")):
-            html_text = fetch_text(source, timeout=timeout)
-        else:
-            html_text = fetch_text(build_edit_url(title), timeout=timeout)
+    except (_FetchTransportError, json.JSONDecodeError, KeyError, TypeError):
+        html_text = fetch_text(build_edit_url(title), timeout=timeout)
         return extract_from_edit_page(html_text)
 
 
@@ -130,7 +137,9 @@ get_story_source = fetch_story_text
 
 def write_output(text: str, output: Optional[str]) -> None:
     if output:
-        Path(output).write_text(text, encoding="utf-8")
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(text, encoding="utf-8")
     else:
         sys.stdout.write(text)
 
