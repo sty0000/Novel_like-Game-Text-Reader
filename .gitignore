@@ -13,13 +13,16 @@ env/
 .env.*
 
 # Generated story and audio artifacts
+txt/
 samples/
+parsed/
 segments/
 audio/
 *.mp3
 *.wav
 *.m4a
 *.flac
+*.txt
 
 # Tool caches
 .pytest_cache/
