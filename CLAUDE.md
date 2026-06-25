@@ -61,4 +61,4 @@ python story_reader.py --list
 - Keep `get_text.py` independent and reusable; place catalog browsing or interactive behavior in `story_reader.py` rather than in the fetcher.
 - Network functions should continue to raise `CrawlError` with user-readable Chinese messages for expected failures.
 - Generated story `.txt` outputs are user artifacts; do not delete or overwrite them unless explicitly requested.
-- The README includes a Conventional Commits guide. If committing changes, follow the documented `<type>(<optional scope>): <description>` style.
+- The README includes a Conventional Commits guide. If committing changes, follow the documented `<type>(<optional scope>): <description>` style. And remember DO NOT add Claude as co-workers in commit.
