@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>TTS 模型调研目录</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.7; max-width: 920px; margin: 40px auto; padding: 0 24px; color: #1f2937; }
+    h1, h2 { color: #111827; }
+    code, pre { background: #f3f4f6; border-radius: 6px; }
+    pre { padding: 16px; overflow-x: auto; }
+    li { margin: 0.3em 0; }
+  </style>
+</head>
+<body>
+  <h1>TTS 模型调研目录</h1>
+  <p>本目录用于沉淀《明日方舟》剧情朗读项目的 TTS 模型调研、执行手册、评估标准和可复现实验脚本。</p>
+  <h2>基础结论</h2>
+  <ol>
+    <li><strong>短期闭环：Edge TTS</strong>，用于验证工程流程，不支持训练特定声音。</li>
+    <li><strong>核心路线：GPT-SoVITS</strong>，最贴近 1 分钟以内多段语音文本对照样本训练或复刻特定声音的需求。</li>
+    <li><strong>后续横评：CosyVoice / IndexTTS / Fish Speech</strong>，作为 zero-shot / voice cloning 候选。</li>
+    <li><strong>实验边界：ChatTTS</strong>，适合对话风格实验，不作为当前主线。</li>
+  </ol>
+  <h2>推荐执行顺序</h2>
+  <pre><code>python investigation/scripts/00_env_check.py --output-dir investigation/docs/generated/env
+python investigation/scripts/01_build_benchmark_corpus.py --output-dir investigation/docs/generated/corpus
+python investigation/scripts/02_plan_edge_tts_run.py --corpus investigation/docs/generated/corpus/benchmark_cases.jsonl --output-dir investigation/docs/generated/edge_tts
+python investigation/scripts/03_plan_gpt_sovits_run.py --output-dir investigation/docs/generated/gpt_sovits
+python investigation/scripts/04_plan_model_comparison.py --output-dir investigation/docs/generated/comparison
+python investigation/scripts/05_generate_report_assets.py --generated-dir investigation/docs/generated --output-dir investigation/docs/generated/report</code></pre>
+  <p>Markdown 是源文档，HTML 仅作为阅读增强版。</p>
+</body>
+</html>
