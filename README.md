@@ -1,10 +1,33 @@
-﻿# Novel Like Game Text Reader
+# Novel Like Game Text Reader
 
-* This is a text reader project based on AI reader and Novel-Like game text processing.
+## Goal
+
+本项目目标是构建一条面向《明日方舟》剧情的语料处理流水线：从 [PRTS wiki](https://prts.wiki/w/%E9%A6%96%E9%A1%B5) 获取剧情对话源码，对角色对白、旁白、舞台提示等内容做结构化预处理，再通过 TTS 将视觉文字转换为适合收听的有声文本。
+
+当前阶段聚焦三件事：
+
+1. 抓取 PRTS wiki 中单个剧情页面或剧情目录中的 raw source。
+2. 设计面向 TTS 的清洗、分段和结构化输出格式。
+3. 提供一个轻量 TTS 示例脚本，先打通“文本 → 音频”的最小闭环。
+
+```text
+PRTS wiki → get_text.py / story_reader.py → raw story source → preprocessing → TTS-ready segments → audio
+```
+
+## Requirements
+
+- Python 3.10+
+- 抓取剧情需要联网访问 `https://prts.wiki/`
+- 核心抓取脚本仅使用 Python 标准库
+- TTS 示例脚本需要额外安装 `edge-tts`
+
+```bash
+python -m pip install edge-tts
+```
 
 ## Story Source Fetcher
 
-Use `get_text.py` to fetch one raw story source from PRTS wiki.
+`get_text.py` 是底层抓取器，用于从 PRTS wiki 获取一个剧情页面的原始 wiki 源码。
 
 ### Command Line
 
@@ -13,11 +36,9 @@ python get_text.py "W2G/BEG" -o beg.txt
 python get_text.py "https://prts.wiki/index.php?title=W2G/BEG&action=edit" -o beg.txt
 ```
 
-If `-o` is omitted, `get_text.py` prints the raw source to stdout. `story_reader.py` writes to a `.txt` file by default.
+如果省略 `-o`，`get_text.py` 会把 raw source 输出到 stdout。
 
 ### Python Interface
-
-Other programs can import the fetcher and process the returned text:
 
 ```python
 from get_text import fetch_story_text
@@ -25,11 +46,11 @@ from get_text import fetch_story_text
 raw_text = fetch_story_text("W2G/BEG")
 ```
 
-`fetch_story_text(source)` accepts a page title, normal wiki URL, or edit-page URL, and returns the raw story source as a `str`.
+`fetch_story_text(source)` 接受页面标题、普通 wiki URL 或编辑页 URL，并返回原始剧情源码字符串。抓取逻辑优先使用 MediaWiki API；当传输或 API 解析失败时，会回退到编辑页源码文本框。
 
 ## Story Picker App
 
-`story_reader.py` is the user-facing program. It loads the story catalog from the wiki, lets the user filter and choose a story, then exports the raw source to a `.txt` file.
+`story_reader.py` 是面向用户的剧情选择入口。它从 PRTS wiki 的“剧情一览”页面载入候选剧情，允许通过关键词筛选和序号选择，然后导出选中页面的 raw source。
 
 ### Interactive Mode
 
@@ -45,224 +66,121 @@ python story_reader.py --list
 
 ### Direct Mode
 
-If you already know the story title or URL, you can still bypass selection:
+如果已经知道剧情标题或 URL，可以绕过交互选择：
 
 ```powershell
 python story_reader.py "W2G/BEG"
+python story_reader.py "W2G/BEG" -o samples/W2G_BEG.raw.txt
 ```
 
-### GUI-ready Functions
+未指定 `-o` 时，`story_reader.py` 会根据标题生成默认 `.txt` 文件名。
 
-Other programs can import these functions from `story_reader.py`:
+## 语料预处理设计
 
-- `load_story_catalog()` to get the available story list
-- `choose_story_entry()` to reuse the selection logic
-- `default_output_path()` to get the default `.txt` output name
-- `fetch_story_text()` from `get_text.py` to obtain raw source text
+PRTS 页面返回的是 MediaWiki 源码，不建议直接输入 TTS。推荐保留 raw source，并生成独立的结构化中间格式，方便后续调试、回溯和替换 TTS 引擎。
 
-## Commit 规范 [![starline](https://starlines.qoo.monster/assets/qoomon/5dfcdf8eec66a051ecd85625518cfd13@gist)](https://github.com/qoomon/starline)
+### 推荐流水线
 
-See how [a minor change](#examples) to your commit message style can make a difference. 
-
-<pre>
-git commit -m"<b><a href="#types">&lt;type&gt;</a></b></font>(<b><a href="#scopes">&lt;optional scope&gt;</a></b>): <b><a href="#description">&lt;description&gt;</a></b>" \
-  -m"<b><a href="#body">&lt;optional body&gt;</a></b>" \
-  -m"<b><a href="#footer">&lt;optional footer&gt;</a></b>"
-</pre>
-
-> [!Note] 
-> This cheatsheet is opinionated, however it does not violate the specification of [conventional commits](https://www.conventionalcommits.org/)
-
-> [!TIP]
-> Take a look at **[git-conventional-commits](https://github.com/qoomon/git-conventional-commits)** ; a CLI util to ensure these conventions, determine version and generate changelogs.
-
-## Commit Message Formats
-
-### General Commit
-<pre>
-<b><a href="#types">&lt;type&gt;</a></b></font>(<b><a href="#scopes">&lt;optional scope&gt;</a></b>): <b><a href="#description">&lt;description&gt;</a></b>
-<sub>empty line as separator</sub>
-<b><a href="#body">&lt;optional body&gt;</a></b>
-<sub>empty line as separator</sub>
-<b><a href="#footer">&lt;optional footer&gt;</a></b>
-</pre>
-
-### Initial Commit 
-```
-chore: init
+```text
+raw wikitext
+  → normalize
+  → line/block split
+  → classify blocks
+  → extract speaker / text / narration / stage direction
+  → merge and split TTS units
+  → JSONL or TXT for synthesis
 ```
 
-### Merge Commit
-<pre>
-Merge branch '<b>&lt;branch name&gt;</b>'
-</pre>
-<sup>Follows default git merge message</sup>
+### 推荐 JSONL 字段
 
-### Revert Commit
-<pre>
-Revert "<b>&lt;reverted commit subject line&gt;</b>"
-</pre>
-<sup>Follows default git revert message</sup>
+```json
+{
+  "story_title": "W2G/BEG",
+  "segment_id": 1,
+  "speaker": "旁白",
+  "role": "narration",
+  "text": "……",
+  "source_kind": "prts_raw",
+  "original_text": "……"
+}
+```
 
+### 分类建议
 
-### Types
-- Changes relevant to the API or UI:
-    - `feat` Commits that add, adjust or remove a new feature to the API or UI
-    - `fix` Commits that fix an API or UI bug of a preceded `feat` commit
-- `refactor` Commits that rewrite or restructure code without altering API or UI behavior
-    - `perf` Commits are special type of `refactor` commits that specifically improve performance
-- `style` Commits that address code style (e.g., white-space, formatting, missing semi-colons) and do not affect application behavior
-- `test` Commits that add missing tests or correct existing ones
-- `docs` Commits that exclusively affect documentation
-- `build` Commits that affect build-related components such as build tools, dependencies, project version, ...
-- `ops` Commits that affect operational aspects like infrastructure (IaC), deployment scripts, CI/CD pipelines, backups, monitoring, or recovery procedures, ...
-- `chore` Commits that represent tasks like initial commit, modifying `.gitignore`, ...
+- `scene_title`：章节、场景或转场标题。
+- `dialogue`：角色对白，尽量保留 `speaker`。
+- `narration`：无明确说话人的叙述文本。
+- `stage_direction`：动作、音效、表情、停顿等舞台提示；默认不直接朗读，或用旁白音色弱化处理。
+- `meta`：导航模板、分类、站点链接、注释等不适合朗读的元信息。
+- `unknown`：暂时无法稳定判断的内容，保留给人工检查。
 
-### Scopes
-The `scope` provides additional contextual information.
-* The scope is an **optional** part
-* Allowed scopes vary and are typically defined by the specific project
-* **Do not** use issue identifiers as scopes
+### TTS 分段原则
 
-### Breaking Changes Indicator
-- A commit that introduce breaking changes **must** be indicated by an `!` before the `:` in the subject line e.g. `feat(api)!: remove status endpoint`
-- Breaking changes **should** be described in the [commit footer section](#footer), if the [commit description](#description) isn't sufficiently informative
+- 场景切换、说话人切换、旁白/对白切换时断开。
+- 同一说话人连续短句可以合并，减少机械停顿。
+- 单段目标长度建议为 80–180 个中文字符。
+- 单段上限建议为 220–280 个中文字符，超过后按 `。！？；，、……——` 等中文标点二次切分。
+- 不要无差别删除 `{{...}}` 模板和 `[[...]]` 链接；它们可能包含角色、剧情结构或显示文本。
 
-### Description
-The `description` contains a concise description of the change. 
-- The description is a **mandatory** part
-- Use the imperative, present tense: "change" not "changed" nor "changes"
-  - Think of `This commit will...` or `This commit should...`
-- **Do not** capitalize the first letter
-- **Do not** end the description with a period (`.`)
-- In case of breaking changes also see [breaking changes indicator](#breaking-changes-indicator)
+## TTS 方案
 
-### Body
-The `body` should include the motivation for the change and contrast this with previous behavior.
-- The body is an **optional** part
-- Use the imperative, present tense: "change" not "changed" nor "changes"
+| 方案 | 适合阶段 | 优点 | 注意事项 |
+| --- | --- | --- | --- |
+| [Edge TTS](https://github.com/rany2/edge-tts) | 第一阶段 demo | 接入简单、无需本地模型、中文 voice 可用 | 依赖在线服务，不适合完全离线 |
+| [ChatTTS](https://github.com/2noise/ChatTTS) | 对话实验 | 面向中英文对话，适合探索自然对白 | 本地环境和生成稳定性需要单独验证 |
+| [CosyVoice](https://github.com/FunAudioLLM/CosyVoice) | 后续高质量本地化 | 多语种、零样本能力，适合角色音色探索 | 推理环境较重 |
+| [Fish Speech](https://github.com/fishaudio/fish-speech) | 后续本地流水线 | 开源多语种 TTS/语音生成能力强 | 需要模型与推理资源 |
+| [IndexTTS](https://github.com/index-tts/index-tts) | 后续中文高质量候选 | 面向中文/英文的高质量 TTS 方向 | 接入方式需按官方项目更新验证 |
+| [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | 后续候选 | 多语种和自然语言控制潜力 | 需确认具体 API 或本地部署流程 |
 
-### Footer
-The `footer` should contain issue references and informations about **Breaking Changes**
-- The footer is an **optional** part, except if the commit introduce breaking changes
-- *Optionally* reference issue identifiers (e.g., `Closes #123`, `Fixes JIRA-456`) 
-- **Breaking Changes** **must** start with the word `BREAKING CHANGE:`
-  - For a single line description just add a space after `BREAKING CHANGE:`
-  - For a multi line description add two new lines after `BREAKING CHANGE:`
+建议优先用 Edge TTS 打通工程闭环，再根据质量、离线需求和角色音色需求接入本地模型。
 
-### Versioning
-- **If** your next release contains commit with...
-   - **Breaking Changes** incremented the **major version**
-   - **API relevant changes** (`feat` or `fix`) incremented the **minor version**
-- **Else** increment the **patch version**
+## Edge TTS 示例脚本
 
+`scripts/tts_edge.py` 可以把普通文本或 JSONL 中的 `text` 字段合成为音频。
 
-### Examples
-- ```
-  feat: add email notifications on new direct messages
-  ```
-- ```
-  feat(shopping cart): add the amazing button
-  ```
-- ```
-  feat!: remove ticket list endpoint
+### TXT 输入
 
-  refers to JIRA-1337
+```powershell
+python scripts/tts_edge.py --input samples/W2G_BEG.raw.txt --output audio/W2G_BEG.mp3 --voice zh-CN-XiaoxiaoNeural
+```
 
-  BREAKING CHANGE: ticket endpoints no longer supports list all entities.
-  ```
-- ```
-  fix(shopping-cart): prevent order an empty shopping cart
-  ```
-- ```
-  fix(api): fix wrong calculation of request body checksum
-  ```
-- ```
-  fix: add missing parameter to service call
+### JSONL 输入
 
-  The error occurred due to <reasons>.
-  ```
-- ```
-  perf: decrease memory footprint for determine unique visitors by using HyperLogLog
-  ```
-- ```
-  build: update dependencies
-  ```
-- ```
-  build(release): bump version to 1.0.0
-  ```
-- ```
-  refactor: implement fibonacci number calculation as recursion
-  ```
-- ```
-  style: remove empty line
-  ```
+```powershell
+python scripts/tts_edge.py --format jsonl --input segments/W2G_BEG.jsonl --output audio/W2G_BEG.mp3 --voice zh-CN-YunjianNeural
+```
 
----
-  
-## Git Hook Scripts to ensure commit message header format
-<details>
-<summary>Click to expand</summary>
-   
-### commit-msg Hook (local)
-- Create a commit-msg hook using [git-conventional-commits cli](https://github.com/qoomon/git-conventional-commits?tab=readme-ov-file#automatically-validate-commit-message-convention-before-commit)
+常用参数：
 
-### pre-receive Hook (server side)
-- create following file in your repository folder `.git/hooks/pre-receive`
-  ```shell
-  #!/usr/bin/env bash
+- `--voice`：Edge TTS voice 名称。
+- `--rate`：语速，例如 `-10%` 或 `+15%`。
+- `--volume`：音量，例如 `+0%`。
+- `--text-field`：JSONL 中要合成的字段名，默认 `text`。
 
-  # Pre-receive hook that will block commits with messages that do not follow regex rule
+## Validation
 
-  commit_msg_type_regex='feat|fix|refactor|style|test|docs|build'
-  commit_msg_scope_regex='.{1,20}'
-  commit_msg_description_regex='.{1,100}'
-  commit_msg_regex="^(${commit_msg_type_regex})(\(${commit_msg_scope_regex}\))?: (${commit_msg_description_regex})\$"
-  merge_msg_regex="^Merge branch '.+'\$"
+基础检查：
 
-  zero_commit="0000000000000000000000000000000000000000"
+```bash
+python -m compileall get_text.py story_reader.py scripts/tts_edge.py
+python get_text.py --help
+python story_reader.py --help
+python scripts/tts_edge.py --help
+```
 
-  # Do not traverse over commits that are already in the repository
-  excludeExisting="--not --all"
+联网抓取检查：
 
-  error=""
-  while read oldrev newrev refname; do
-    # branch or tag get deleted
-    if [ "$newrev" = "$zero_commit" ]; then
-      continue
-    fi
+```bash
+python story_reader.py --list
+python get_text.py "W2G/BEG" -o samples/W2G_BEG.raw.txt
+python story_reader.py "W2G/BEG" -o samples/W2G_BEG.reader.txt
+```
 
-    # Check for new branch or tag
-    if [ "$oldrev" = "$zero_commit" ]; then
-      rev_span=`git rev-list $newrev $excludeExisting`
-    else
-      rev_span=`git rev-list $oldrev..$newrev $excludeExisting`
-    fi
+错误路径检查：
 
-    for commit in $rev_span; do
-      commit_msg_header=$(git show -s --format=%s $commit)
-      if ! [[ "$commit_msg_header" =~ (${commit_msg_regex})|(${merge_msg_regex}) ]]; then
-        echo "$commit" >&2
-        echo "ERROR: Invalid commit message format" >&2
-        echo "$commit_msg_header" >&2
-        error="true"
-      fi
-    done
-  done
+```bash
+python get_text.py "不存在的标题"
+```
 
-  if [ -n "$error" ]; then
-    exit 1
-  fi
-  ```
-* ⚠ make `.git/hooks/pre-receive` executable (unix: `chmod +x '.git/hooks/pre-receive'`)
-
-</details>
-
------
-## References
-- https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13#file-conventional-commits-cheatsheet-md
-
-
-
-
-
+期望行为：输出明确的中文错误信息，不生成空白成功文件。

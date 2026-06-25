@@ -138,7 +138,9 @@ def choose_story_entry(entries: list[StoryEntry]) -> StoryEntry:
 
 
 def write_output(text: str, output: str) -> None:
-    Path(output).write_text(text, encoding="utf-8")
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(text, encoding="utf-8")
 
 
 def run_selected_story(title: str, output: Optional[str], timeout: int) -> None:
