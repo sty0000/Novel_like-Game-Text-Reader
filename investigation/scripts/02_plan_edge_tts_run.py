@@ -51,7 +51,6 @@ def main() -> int:
         "",
     ]
     run_template = []
-
     used_names: dict[str, str] = {}
 
     for item in cases:
