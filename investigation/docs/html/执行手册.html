@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>TTS 调研执行手册</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.7; max-width: 960px; margin: 40px auto; padding: 0 24px; color: #1f2937; }
+    h1, h2 { color: #111827; }
+    code, pre { background: #f3f4f6; border-radius: 6px; }
+    pre { padding: 16px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>TTS 调研执行手册</h1>
+  <p>本 HTML 是 <code>03-执行手册.md</code> 的阅读增强版。实际维护以 Markdown 为准。</p>
+  <h2>执行步骤</h2>
+  <ol>
+    <li>收集环境信息。</li>
+    <li>生成 benchmark corpus。</li>
+    <li>生成 Edge TTS 执行计划。</li>
+    <li>生成 GPT-SoVITS 主线执行规划。</li>
+    <li>生成候选模型对比计划。</li>
+    <li>生成报告资产。</li>
+    <li>将实验结果固化回文档。</li>
+  </ol>
+  <h2>完整命令</h2>
+  <pre><code>python investigation/scripts/00_env_check.py --output-dir investigation/docs/generated/env
+python investigation/scripts/01_build_benchmark_corpus.py --output-dir investigation/docs/generated/corpus
+python investigation/scripts/02_plan_edge_tts_run.py --corpus investigation/docs/generated/corpus/benchmark_cases.jsonl --output-dir investigation/docs/generated/edge_tts
+python investigation/scripts/03_plan_gpt_sovits_run.py --output-dir investigation/docs/generated/gpt_sovits
+python investigation/scripts/04_plan_model_comparison.py --output-dir investigation/docs/generated/comparison
+python investigation/scripts/05_generate_report_assets.py --generated-dir investigation/docs/generated --output-dir investigation/docs/generated/report</code></pre>
+  <h2>保存路径</h2>
+  <p>所有生成资产默认保存到 <code>investigation/docs/generated/</code>，并按 env、corpus、edge_tts、gpt_sovits、comparison、report 分类。</p>
+</body>
+</html>
