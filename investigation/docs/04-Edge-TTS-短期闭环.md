@@ -50,7 +50,7 @@ investigation/docs/generated/edge_tts/edge_tts_run_template.json
 如果要真实调用现有 `scripts/tts_edge.py`，建议把单条文本保存为临时 txt，再执行：
 
 ```bash
-python scripts/tts_edge.py --input investigation/docs/generated/edge_tts/input/case_001.txt --output investigation/docs/generated/edge_tts/audio/case_001.mp3 --voice zh-CN-XiaoxiaoNeural
+python scripts/tts_edge.py --input investigation/docs/generated/edge_tts/input/case_001_short_dialogue.txt --output investigation/docs/generated/edge_tts/audio/case_001_short_dialogue.mp3 --voice zh-CN-XiaoxiaoNeural
 ```
 
 ## 结果记录
