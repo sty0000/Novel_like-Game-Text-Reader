@@ -11,7 +11,8 @@ from typing import Optional
 from urllib.parse import urlencode
 
 from get_text import CrawlError, fetch_story_text, fetch_text
-from scripts.parse_story import extract_segments, write_jsonl
+from scripts.parse_story import extract_segments
+from scripts.speech_modifier import enrich_segments, write_jsonl as write_enriched_jsonl
 from scripts.tts_edge import load_input_text, synthesize
 
 
@@ -151,17 +152,23 @@ def save_story_bundle(
     rate: str,
     volume: str,
     text_field: str,
-    speak_speaker_prefix: bool,
 ) -> None:
     txt_path.parent.mkdir(parents=True, exist_ok=True)
     txt_path.write_text(raw_text, encoding="utf-8")
 
-    segments = extract_segments(raw_text, title, txt_path.name)
-    if not segments:
+    # 1. Parse raw wiki text into structured segments
+    raw_segments = extract_segments(raw_text, title, txt_path.name)
+    if not raw_segments:
         raise CrawlError("\u672a\u80fd\u4ece\u5267\u60c5\u6e90\u7801\u4e2d\u89e3\u6790\u51fa\u6709\u6548\u7247\u6bb5")
-    write_jsonl(segments, parsed_path)
 
-    tts_text = load_input_text(parsed_path, "jsonl", text_field, speak_speaker=speak_speaker_prefix)
+    # 2. Enrich with context-aware speech prefixes (e.g. "xxx\u53cd\u9a73\u9053\uff1a")
+    from dataclasses import asdict
+    segment_dicts = [asdict(seg) for seg in raw_segments]
+    enriched = enrich_segments(segment_dicts)
+    write_enriched_jsonl(enriched, parsed_path)
+
+    # 3. Build TTS text from enriched segments
+    tts_text = load_input_text(parsed_path, "jsonl", text_field)
     if not tts_text.strip():
         raise CrawlError("\u89e3\u6790\u540e\u7684\u6587\u672c\u4e3a\u7a7a\uff0c\u65e0\u6cd5\u751f\u6210\u97f3\u9891")
 
@@ -178,7 +185,6 @@ def run_selected_story(
     rate: str,
     volume: str,
     text_field: str,
-    speak_speaker_prefix: bool,
 ) -> None:
     raw_text = fetch_story_text(title, timeout=timeout)
     base_name = sanitize_filename(title)
@@ -197,7 +203,6 @@ def run_selected_story(
         rate=rate,
         volume=volume,
         text_field=text_field,
-        speak_speaker_prefix=speak_speaker_prefix,
     )
 
     print(f"\u5df2\u4fdd\u5b58\u6e90\u7801\uff1a{txt_path}", file=sys.stderr)
@@ -218,7 +223,6 @@ def main() -> int:
     parser.add_argument("--rate", default="+0%", help="\u8bed\u901f\uff0c\u4f8b\u5982 +0%%\u3001-10%%\u3001+15%%")
     parser.add_argument("--volume", default="+0%", help="\u97f3\u91cf\uff0c\u4f8b\u5982 +0%%")
     parser.add_argument("--text-field", default="text", help="JSONL \u8f93\u5165\u4e2d\u7528\u4e8e\u5408\u6210\u7684\u5b57\u6bb5\u540d")
-    parser.add_argument("--no-speaker-prefix", action="store_true", help="\u5173\u95ed\u5bf9\u8bdd\u524d\u7684\u201cxxx\u8bf4\uff1a\u201d\u524d\u7f00")
     args = parser.parse_args()
 
     try:
@@ -233,7 +237,6 @@ def main() -> int:
                 args.rate,
                 args.volume,
                 args.text_field,
-                not args.no_speaker_prefix,
             )
             return 0
 
@@ -255,7 +258,6 @@ def main() -> int:
             args.rate,
             args.volume,
             args.text_field,
-            not args.no_speaker_prefix,
         )
         return 0
     except CrawlError as error:

@@ -24,6 +24,12 @@ audio/
 *.m4a
 *.flac
 *.txt
+*.csv
+
+# Trained ML model weights and configs (large files; users train their own)
+scripts/emotion_classifier/model/*
+!scripts/emotion_classifier/model/README.md
+scripts/emotion_classifier/model/checkpoints/
 
 # Tool caches
 .pytest_cache/
