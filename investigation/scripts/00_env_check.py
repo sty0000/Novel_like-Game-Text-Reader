@@ -14,7 +14,15 @@ COMMANDS = ["git", "python", "ffmpeg", "nvidia-smi"]
 
 def run_command(command: list[str]) -> str:
     try:
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=10, check=False)
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
     except (OSError, subprocess.TimeoutExpired) as error:
         return f"不可用: {error}"
     output = (completed.stdout or completed.stderr).strip()
