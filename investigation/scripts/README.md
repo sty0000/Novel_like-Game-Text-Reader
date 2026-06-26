@@ -11,6 +11,7 @@ python investigation/scripts/02_plan_edge_tts_run.py --corpus investigation/docs
 python investigation/scripts/03_plan_gpt_sovits_run.py --output-dir investigation/docs/generated/gpt_sovits
 python investigation/scripts/04_plan_model_comparison.py --output-dir investigation/docs/generated/comparison
 python investigation/scripts/05_generate_report_assets.py --generated-dir investigation/docs/generated --output-dir investigation/docs/generated/report
+python investigation/scripts/06_plan_emotion_tagging.py --output-dir investigation/docs/generated/emotion
 ```
 
 ## 输出约定
