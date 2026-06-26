@@ -27,6 +27,7 @@
 8. [07-ChatTTS-实验边界](07-ChatTTS-实验边界.md)
 9. [08-实验记录模板](08-实验记录模板.md)
 10. [09-结果固化指南](09-结果固化指南.md)
+11. [10-情绪标注与多角色演绎方案](10-情绪标注与多角色演绎方案.md)
 
 ## 脚本入口
 
@@ -39,6 +40,7 @@ python investigation/scripts/02_plan_edge_tts_run.py --corpus investigation/docs
 python investigation/scripts/03_plan_gpt_sovits_run.py --output-dir investigation/docs/generated/gpt_sovits
 python investigation/scripts/04_plan_model_comparison.py --output-dir investigation/docs/generated/comparison
 python investigation/scripts/05_generate_report_assets.py --generated-dir investigation/docs/generated --output-dir investigation/docs/generated/report
+python investigation/scripts/06_plan_emotion_tagging.py --output-dir investigation/docs/generated/emotion
 ```
 
 这些脚本默认只生成计划、模板、记录和报告资产，不下载模型权重，也不提交音频文件。

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from pathlib import Path
 
 
@@ -19,6 +20,10 @@ def load_cases(path: Path) -> list[dict[str, str]]:
 
 def safe_name(value: str) -> str:
     return "".join(char if char.isalnum() or char in "-_" else "_" for char in value)
+
+
+def quote_arg(value: str) -> str:
+    return shlex.quote(value)
 
 
 def main() -> int:
@@ -46,15 +51,20 @@ def main() -> int:
         "",
     ]
     run_template = []
+    used_names: dict[str, str] = {}
 
     for item in cases:
         case_id = safe_name(item["case_id"])
+        previous_case = used_names.get(case_id)
+        if previous_case is not None:
+            raise ValueError(f"case_id {item['case_id']!r} 与 {previous_case!r} 生成了相同文件名 {case_id!r}")
+        used_names[case_id] = item["case_id"]
         input_path = input_dir / f"{case_id}.txt"
         output_path = audio_dir / f"{case_id}.mp3"
         input_path.write_text(item["text"] + "\n", encoding="utf-8")
         command = (
-            f"python scripts/tts_edge.py --input {input_path.as_posix()} "
-            f"--output {output_path.as_posix()} --voice {args.voice}"
+            f"python {quote_arg('scripts/tts_edge.py')} --input {quote_arg(input_path.as_posix())} "
+            f"--output {quote_arg(output_path.as_posix())} --voice {quote_arg(args.voice)}"
         )
         commands.extend([f"## {case_id}", "", f"说话人：{item['speaker']}", "", "```bash", command, "```", ""])
         run_template.append(

@@ -21,7 +21,7 @@ def read_optional(path: Path) -> str:
 
 
 def markdown_to_simple_html(markdown: str, title: str) -> str:
-    escaped = html.escape(markdown)
+    body = render_markdown(markdown)
     return f"""<!doctype html>
 <html lang=\"zh-CN\">
 <head>
@@ -29,14 +29,87 @@ def markdown_to_simple_html(markdown: str, title: str) -> str:
   <title>{html.escape(title)}</title>
   <style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; line-height: 1.7; max-width: 960px; margin: 40px auto; padding: 0 24px; color: #1f2937; }}
-    pre {{ white-space: pre-wrap; background: #f3f4f6; padding: 16px; border-radius: 6px; }}
+    h1, h2, h3 {{ color: #111827; }}
+    code, pre {{ background: #f3f4f6; border-radius: 6px; }}
+    code {{ padding: 0.1em 0.3em; }}
+    pre {{ padding: 16px; overflow-x: auto; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+    th, td {{ border: 1px solid #d1d5db; padding: 8px; text-align: left; }}
+    th {{ background: #f9fafb; }}
   </style>
 </head>
 <body>
-  <pre>{escaped}</pre>
+{body}
 </body>
 </html>
 """
+
+
+def inline_markdown(text: str) -> str:
+    escaped = html.escape(text)
+    parts = escaped.split("`")
+    for index in range(1, len(parts), 2):
+        parts[index] = f"<code>{parts[index]}</code>"
+    return "".join(parts)
+
+
+def render_table(rows: list[str]) -> str:
+    parsed = [[cell.strip() for cell in row.strip().strip("|").split("|")] for row in rows]
+    if len(parsed) >= 2 and all(set(cell) <= {"-", ":", " "} for cell in parsed[1]):
+        header, body_rows = parsed[0], parsed[2:]
+        header_html = "".join(f"<th>{inline_markdown(cell)}</th>" for cell in header)
+        body_html = "".join(
+            "<tr>" + "".join(f"<td>{inline_markdown(cell)}</td>" for cell in row) + "</tr>" for row in body_rows
+        )
+        return f"<table><thead><tr>{header_html}</tr></thead><tbody>{body_html}</tbody></table>"
+    return "\n".join(f"<p>{inline_markdown(row)}</p>" for row in rows)
+
+
+def render_markdown(markdown: str) -> str:
+    html_lines: list[str] = []
+    table_rows: list[str] = []
+    in_code = False
+    code_lines: list[str] = []
+
+    def flush_table() -> None:
+        nonlocal table_rows
+        if table_rows:
+            html_lines.append(render_table(table_rows))
+            table_rows = []
+
+    for line in markdown.splitlines():
+        if line.startswith("```"):
+            if in_code:
+                html_lines.append(f"<pre><code>{html.escape(chr(10).join(code_lines))}</code></pre>")
+                code_lines = []
+                in_code = False
+            else:
+                flush_table()
+                in_code = True
+            continue
+        if in_code:
+            code_lines.append(line)
+            continue
+        if line.startswith("|") and line.endswith("|"):
+            table_rows.append(line)
+            continue
+        flush_table()
+        if line.startswith("# "):
+            html_lines.append(f"<h1>{inline_markdown(line[2:])}</h1>")
+        elif line.startswith("## "):
+            html_lines.append(f"<h2>{inline_markdown(line[3:])}</h2>")
+        elif line.startswith("### "):
+            html_lines.append(f"<h3>{inline_markdown(line[4:])}</h3>")
+        elif line.startswith("- "):
+            html_lines.append(f"<p>• {inline_markdown(line[2:])}</p>")
+        elif line.strip():
+            html_lines.append(f"<p>{inline_markdown(line)}</p>")
+        else:
+            html_lines.append("")
+    flush_table()
+    if in_code:
+        html_lines.append(f"<pre><code>{html.escape(chr(10).join(code_lines))}</code></pre>")
+    return "\n".join(html_lines)
 
 
 def main() -> int:
