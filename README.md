@@ -346,6 +346,24 @@ python -m scripts.emotion_classifier.train -i train_data.csv --epochs 5 --export
 - `--batch-size`：批次大小，默认 16
 - `--export-onnx`：训练完成后导出 ONNX 格式（推荐，推理更快且不需要 PyTorch）
 
+## GUI 界面（story_reader_gui.py）
+
+`story_reader_gui.py` 提供一个简洁的图形界面，用于浏览、搜索剧情并一键生成语音。
+
+```powershell
+python story_reader_gui.py
+```
+
+功能：
+
+- 启动时自动从 PRTS wiki 加载剧情目录
+- 关键词实时搜索过滤
+- 双击或点击按钮一键走完抓取→解析→说书脚本→语音合成的完整流水线
+- 可调节语音、语速、音量
+- 后台处理，界面不卡顿
+
+依赖：`tkinter`（Python 自带，无需额外安装）。
+
 ## Validation
 
 基础检查：

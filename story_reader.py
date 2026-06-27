@@ -17,7 +17,7 @@ from scripts.tts_edge import load_input_text, synthesize
 
 
 DEFAULT_API = "https://prts.wiki/api.php"
-DEFAULT_OVERVIEW_TITLE = "\u5267\u60c5\u4e00\u89c8"
+DEFAULT_OVERVIEW_TITLE = "剧情一览"
 DEFAULT_TXT_DIR = "txt"
 DEFAULT_PARSED_DIR = "parsed"
 DEFAULT_AUDIO_DIR = "audio"
@@ -86,7 +86,7 @@ def load_story_catalog(overview_title: str = DEFAULT_OVERVIEW_TITLE) -> list[Sto
         seen_titles.add(key)
 
     if not entries:
-        raise CrawlError("\u672a\u80fd\u4ece\u5267\u60c5\u4e00\u89c8\u4e2d\u89e3\u6790\u51fa\u53ef\u9009\u5267\u60c5")
+        raise CrawlError("未能从剧情一览中解析出可选剧情")
     return entries
 
 
@@ -105,22 +105,22 @@ def filter_entries(entries: list[StoryEntry], keyword: str) -> list[StoryEntry]:
 
 
 def choose_story_entry(entries: list[StoryEntry]) -> StoryEntry:
-    print(f"\u5df2\u8f7d\u5165 {len(entries)} \u6761\u5267\u60c5\u3002")
-    print("\u8f93\u5165\u5173\u952e\u8bcd\u7b5b\u9009\uff0c\u4f8b\u5982\uff1a\u5e8f\u7ae0\u30010-1\u3001\u5760\u6b7b\u3001SS\u3001ZT\u3001BEG\u3002")
-    print("\u8f93\u5165 all \u663e\u793a\u5168\u90e8\uff1b\u8f93\u5165 q \u9000\u51fa\u3002")
+    print(f"已载入 {len(entries)} 条剧情。")
+    print("输入关键词筛选，例如：序章、0-1、坠死、SS、ZT、BEG。")
+    print("输入 all 显示全部；输入 q 退出。")
 
     filtered = entries
     while True:
         if filtered:
-            print("\n\u5f53\u524d\u5339\u914d\uff1a")
+            print("\n当前匹配：")
             for index, entry in enumerate(filtered[:80], start=1):
                 print(format_entry(entry, index))
             if len(filtered) > 80:
-                print(f"\u2026\u2026\u8fd8\u6709 {len(filtered) - 80} \u6761\uff0c\u8bf7\u7ee7\u7eed\u7f29\u5c0f\u8303\u56f4\u3002")
+                print(f"……还有 {len(filtered) - 80} 条，请继续缩小范围。")
 
-        choice = input("\n\u8bf7\u8f93\u5165\u5173\u952e\u8bcd\u6216\u5e8f\u53f7\uff1a").strip()
+        choice = input("\n请输入关键词或序号：").strip()
         if not choice or choice.casefold() == "q":
-            raise CrawlError("\u672a\u9009\u62e9\u4efb\u4f55\u5267\u60c5")
+            raise CrawlError("未选择任何剧情")
 
         if choice.casefold() == "all":
             filtered = entries
@@ -130,12 +130,12 @@ def choose_story_entry(entries: list[StoryEntry]) -> StoryEntry:
             index = int(choice)
             if 1 <= index <= min(len(filtered), 80):
                 return filtered[index - 1]
-            print("\u5e8f\u53f7\u65e0\u6548\uff0c\u8bf7\u91cd\u8bd5\u3002")
+            print("序号无效，请重试。")
             continue
 
         matches = filter_entries(entries, choice)
         if not matches:
-            print("\u6ca1\u6709\u627e\u5230\u5339\u914d\u9879\uff0c\u8bf7\u91cd\u8bd5\u3002")
+            print("没有找到匹配项，请重试。")
             continue
         if len(matches) == 1:
             return matches[0]
@@ -159,9 +159,9 @@ def save_story_bundle(
     # 1. Parse raw wiki text into structured segments
     raw_segments = extract_segments(raw_text, title, txt_path.name)
     if not raw_segments:
-        raise CrawlError("\u672a\u80fd\u4ece\u5267\u60c5\u6e90\u7801\u4e2d\u89e3\u6790\u51fa\u6709\u6548\u7247\u6bb5")
+        raise CrawlError("未能从剧情源码中解析出有效片段")
 
-    # 2. Enrich with context-aware speech prefixes (e.g. "xxx\u53cd\u9a73\u9053\uff1a")
+    # 2. Enrich with context-aware speech prefixes (e.g. "xxx反驳道：")
     from dataclasses import asdict
     segment_dicts = [asdict(seg) for seg in raw_segments]
     enriched = enrich_segments(segment_dicts)
@@ -170,7 +170,7 @@ def save_story_bundle(
     # 3. Build TTS text from enriched segments
     tts_text = load_input_text(parsed_path, "jsonl", text_field)
     if not tts_text.strip():
-        raise CrawlError("\u89e3\u6790\u540e\u7684\u6587\u672c\u4e3a\u7a7a\uff0c\u65e0\u6cd5\u751f\u6210\u97f3\u9891")
+        raise CrawlError("解析后的文本为空，无法生成音频")
 
     asyncio.run(synthesize(tts_text, audio_path, voice, rate, volume))
 
@@ -205,24 +205,24 @@ def run_selected_story(
         text_field=text_field,
     )
 
-    print(f"\u5df2\u4fdd\u5b58\u6e90\u7801\uff1a{txt_path}", file=sys.stderr)
-    print(f"\u5df2\u4fdd\u5b58\u7ed3\u6784\u5316\u6587\u6863\uff1a{parsed_path}", file=sys.stderr)
-    print(f"\u5df2\u4fdd\u5b58\u97f3\u9891\uff1a{audio_path}", file=sys.stderr)
+    print(f"已保存源码：{txt_path}", file=sys.stderr)
+    print(f"已保存结构化文档：{parsed_path}", file=sys.stderr)
+    print(f"已保存音频：{audio_path}", file=sys.stderr)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="\u4ece PRTS wiki \u9009\u62e9\u5267\u60c5\u5e76\u5bfc\u51fa\u6e90\u7801\u3001\u7ed3\u6784\u5316\u6587\u6863\u548c\u97f3\u9891")
-    parser.add_argument("source", nargs="?", help="\u5df2\u77e5\u5267\u60c5\u6807\u9898\u6216\u5267\u60c5 URL\uff1b\u4e0d\u63d0\u4f9b\u5219\u8fdb\u5165\u9009\u62e9\u6a21\u5f0f")
-    parser.add_argument("--overview-title", default=DEFAULT_OVERVIEW_TITLE, help="\u5267\u60c5\u4e00\u89c8\u9875\u9762\u6807\u9898")
-    parser.add_argument("--timeout", type=int, default=20, help="\u7f51\u7edc\u8d85\u65f6\u79d2\u6570")
-    parser.add_argument("--list", action="store_true", help="\u4ec5\u5217\u51fa\u53ef\u9009\u5267\u60c5")
-    parser.add_argument("--txt-dir", default=DEFAULT_TXT_DIR, help="\u6e90\u7801\u8f93\u51fa\u76ee\u5f55")
-    parser.add_argument("--parsed-dir", default=DEFAULT_PARSED_DIR, help="\u7ed3\u6784\u5316\u6587\u6863\u8f93\u51fa\u76ee\u5f55")
-    parser.add_argument("--audio-dir", default=DEFAULT_AUDIO_DIR, help="\u97f3\u9891\u8f93\u51fa\u76ee\u5f55")
-    parser.add_argument("--voice", default=DEFAULT_VOICE, help="Edge TTS voice \u540d\u79f0")
-    parser.add_argument("--rate", default="+0%", help="\u8bed\u901f\uff0c\u4f8b\u5982 +0%%\u3001-10%%\u3001+15%%")
-    parser.add_argument("--volume", default="+0%", help="\u97f3\u91cf\uff0c\u4f8b\u5982 +0%%")
-    parser.add_argument("--text-field", default="text", help="JSONL \u8f93\u5165\u4e2d\u7528\u4e8e\u5408\u6210\u7684\u5b57\u6bb5\u540d")
+    parser = argparse.ArgumentParser(description="从 PRTS wiki 选择剧情并导出源码、结构化文档和音频")
+    parser.add_argument("source", nargs="?", help="已知剧情标题或剧情 URL；不提供则进入选择模式")
+    parser.add_argument("--overview-title", default=DEFAULT_OVERVIEW_TITLE, help="剧情一览页面标题")
+    parser.add_argument("--timeout", type=int, default=20, help="网络超时秒数")
+    parser.add_argument("--list", action="store_true", help="仅列出可选剧情")
+    parser.add_argument("--txt-dir", default=DEFAULT_TXT_DIR, help="源码输出目录")
+    parser.add_argument("--parsed-dir", default=DEFAULT_PARSED_DIR, help="结构化文档输出目录")
+    parser.add_argument("--audio-dir", default=DEFAULT_AUDIO_DIR, help="音频输出目录")
+    parser.add_argument("--voice", default=DEFAULT_VOICE, help="Edge TTS voice 名称")
+    parser.add_argument("--rate", default="+0%", help="语速，例如 +0%%、-10%%、+15%%")
+    parser.add_argument("--volume", default="+0%", help="音量，例如 +0%%")
+    parser.add_argument("--text-field", default="text", help="JSONL 输入中用于合成的字段名")
     args = parser.parse_args()
 
     try:
@@ -247,7 +247,7 @@ def main() -> int:
             return 0
 
         selected = choose_story_entry(catalog)
-        print(f"\u5df2\u9009\u62e9\uff1a{selected.title}", file=sys.stderr)
+        print(f"已选择：{selected.title}", file=sys.stderr)
         run_selected_story(
             selected.title,
             args.timeout,
@@ -261,10 +261,10 @@ def main() -> int:
         )
         return 0
     except CrawlError as error:
-        print(f"\u9519\u8bef: {error}", file=sys.stderr)
+        print(f"错误: {error}", file=sys.stderr)
         return 1
     except json.JSONDecodeError as error:
-        print(f"\u9519\u8bef: API \u8fd4\u56de\u7684\u4e0d\u662f\u6709\u6548 JSON: {error}", file=sys.stderr)
+        print(f"错误: API 返回的不是有效 JSON: {error}", file=sys.stderr)
         return 1
 
 

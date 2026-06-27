@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 
-DEFAULT_NARRATOR = "\u65c1\u767d"
+DEFAULT_NARRATOR = "旁白"
 BRACKET_SPEECH_RE = re.compile(
     r'^\[(?:name|character)\s*=\s*"(?P<speaker>[^"]+)"[^\]]*\]\s*(?P<text>.*)$',
     re.IGNORECASE,
