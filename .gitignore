@@ -26,9 +26,7 @@ audio/
 *.txt
 *.csv
 
-# Trained ML model weights and configs (large files; users train their own)
-scripts/emotion_classifier/model/*
-!scripts/emotion_classifier/model/README.md
+# Trained ML model checkpoints (can be large; users re-train from scratch)
 scripts/emotion_classifier/model/checkpoints/
 
 # Tool caches
