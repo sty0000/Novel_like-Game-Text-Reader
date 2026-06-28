@@ -9,10 +9,10 @@ from typing import Iterable, Optional
 from scripts.emotion_classifier.rules import detect_emotion
 
 # 可选：如果训练了 ML 模型，取消下面这行注释即可使用
-from scripts.emotion_classifier import EmotionClassifier
-_classifier = EmotionClassifier()
-def detect_emotion(text: str) -> str:
-    return _classifier.predict(text)
+#from scripts.emotion_classifier import EmotionClassifier
+#_classifier = EmotionClassifier()
+#def detect_emotion(text: str) -> str:
+    #return _classifier.predict(text)
 
 
 # ── Constants ──────────────────────────────────────────────
@@ -37,6 +37,14 @@ _MODIFIER_MAP: dict[tuple[str, str], str] = {
     ("speak", "hesitate"): "迟疑的说",
     ("speak", "sigh"): "叹道",
     ("speak", "laugh"): "笑道",
+    ("speak", "determined"): "坚定的说",
+    ("speak", "arrogant"): "傲慢的说",
+    ("speak", "gentle"): "温柔的说",
+    ("speak", "urgent"): "急切的说",
+    ("speak", "desperate"): "绝望的说",
+    ("speak", "relieved"): "松了口气说",
+    ("speak", "serious"): "严肃的说",
+    ("speak", "disgusted"): "厌恶的说",
     # ── continue (same speaker speaks again) ──
     ("continue", "neutral"): "接着说",
     ("continue", "question"): "接着问道",
@@ -50,6 +58,14 @@ _MODIFIER_MAP: dict[tuple[str, str], str] = {
     ("continue", "hesitate"): "接着迟疑的说",
     ("continue", "sigh"): "接着叹道",
     ("continue", "laugh"): "接着笑道",
+    ("continue", "determined"): "接着坚定的说",
+    ("continue", "arrogant"): "接着傲慢的说",
+    ("continue", "gentle"): "接着温柔的说",
+    ("continue", "urgent"): "接着急切的说",
+    ("continue", "desperate"): "接着绝望的说",
+    ("continue", "relieved"): "接着松了口气说",
+    ("continue", "serious"): "接着严肃的说",
+    ("continue", "disgusted"): "接着厌恶的说",
     # ── scene_first (first dialogue after scene change) ──
     ("scene_first", "neutral"): "开口道",
     ("scene_first", "question"): "开口问道",
@@ -63,6 +79,14 @@ _MODIFIER_MAP: dict[tuple[str, str], str] = {
     ("scene_first", "hesitate"): "迟疑的开口",
     ("scene_first", "sigh"): "叹着气开口",
     ("scene_first", "laugh"): "开口笑道",
+    ("scene_first", "determined"): "坚定的开口",
+    ("scene_first", "arrogant"): "傲慢的开口",
+    ("scene_first", "gentle"): "温柔的开口",
+    ("scene_first", "urgent"): "急切的开口",
+    ("scene_first", "desperate"): "绝望的开口",
+    ("scene_first", "relieved"): "如释重负的开口",
+    ("scene_first", "serious"): "严肃的开口",
+    ("scene_first", "disgusted"): "厌恶的开口",
     # ── retort (A→B→A, A replies back sharply) ──
     ("retort", "neutral"): "反驳道",
     ("retort", "question"): "反问",
@@ -76,6 +100,14 @@ _MODIFIER_MAP: dict[tuple[str, str], str] = {
     ("retort", "hesitate"): "迟疑的反驳",
     ("retort", "sigh"): "叹着气反驳",
     ("retort", "laugh"): "笑着反驳",
+    ("retort", "determined"): "坚定的反驳",
+    ("retort", "arrogant"): "傲慢的反驳",
+    ("retort", "gentle"): "温柔的反驳",
+    ("retort", "urgent"): "急切的驳斥",
+    ("retort", "desperate"): "绝望的反驳",
+    ("retort", "relieved"): "松了口气反驳",
+    ("retort", "serious"): "严肃的反驳",
+    ("retort", "disgusted"): "厌恶的反驳",
     # ── respond (new speaker replies to someone) ──
     ("respond", "neutral"): "回应道",
     ("respond", "question"): "回应着问道",
@@ -89,6 +121,14 @@ _MODIFIER_MAP: dict[tuple[str, str], str] = {
     ("respond", "hesitate"): "迟疑的回应",
     ("respond", "sigh"): "叹着气回应",
     ("respond", "laugh"): "笑着回应",
+    ("respond", "determined"): "坚定的回应",
+    ("respond", "arrogant"): "傲慢的回应",
+    ("respond", "gentle"): "温柔的回应",
+    ("respond", "urgent"): "急切的回应",
+    ("respond", "desperate"): "绝望的回应",
+    ("respond", "relieved"): "松了口气回应",
+    ("respond", "serious"): "严肃的回应",
+    ("respond", "disgusted"): "厌恶的回应",
     # ── aside (parenthetical whisper / inner thought) ──
     ("aside", "neutral"): "轻声说",
     ("aside", "question"): "轻声问道",
@@ -102,6 +142,14 @@ _MODIFIER_MAP: dict[tuple[str, str], str] = {
     ("aside", "hesitate"): "欲言又止",
     ("aside", "sigh"): "轻叹一声",
     ("aside", "laugh"): "轻笑一声",
+    ("aside", "determined"): "暗暗下定决心",
+    ("aside", "arrogant"): "傲慢的冷哼",
+    ("aside", "gentle"): "柔声说",
+    ("aside", "urgent"): "急促的低语",
+    ("aside", "desperate"): "绝望的低喃",
+    ("aside", "relieved"): "舒了口气",
+    ("aside", "serious"): "严肃的低语",
+    ("aside", "disgusted"): "厌恶的低声",
 }
 
 
@@ -143,7 +191,7 @@ def _looks_like_retort(text: str, emotion: str) -> bool:
     :func:`~scripts.emotion_classifier.rules.detect_emotion`.
     """
     # Strong confrontational emotions are retort-like by nature
-    if emotion in ("angry", "shock_question"):
+    if emotion in ("angry", "shock_question", "arrogant", "disgusted"):
         return True
 
     # Text-level disagreement / push-back markers
