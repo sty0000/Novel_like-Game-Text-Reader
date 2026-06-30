@@ -57,7 +57,7 @@ def sanitize_filename(name: str) -> str:
     return cleaned or "story"
 
 
-def load_story_catalog(overview_title: str = DEFAULT_OVERVIEW_TITLE) -> list[StoryEntry]:
+def load_story_catalog(overview_title: str = DEFAULT_OVERVIEW_TITLE, timeout: int = 20) -> list[StoryEntry]:
     query = urlencode(
         {
             "action": "parse",
@@ -67,7 +67,7 @@ def load_story_catalog(overview_title: str = DEFAULT_OVERVIEW_TITLE) -> list[Sto
             "formatversion": "2",
         }
     )
-    payload = fetch_text(f"{DEFAULT_API}?{query}")
+    payload = fetch_text(f"{DEFAULT_API}?{query}", timeout=timeout)
     data = json.loads(payload)
     links = data.get("parse", {}).get("links", [])
 
@@ -240,7 +240,7 @@ def main() -> int:
             )
             return 0
 
-        catalog = load_story_catalog(args.overview_title)
+        catalog = load_story_catalog(args.overview_title, timeout=args.timeout)
         if args.list:
             for index, entry in enumerate(catalog, start=1):
                 print(format_entry(entry, index))
@@ -265,6 +265,9 @@ def main() -> int:
         return 1
     except json.JSONDecodeError as error:
         print(f"错误: API 返回的不是有效 JSON: {error}", file=sys.stderr)
+        return 1
+    except (OSError, RuntimeError, ValueError) as error:
+        print(f"错误: {error}", file=sys.stderr)
         return 1
 
 
