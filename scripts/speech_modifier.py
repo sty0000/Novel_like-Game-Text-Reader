@@ -6,6 +6,9 @@ import sys
 from pathlib import Path
 from typing import Iterable, Optional
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from scripts.emotion_classifier.rules import detect_emotion
 
 # 可选：如果训练了 ML 模型，取消下面这行注释即可使用
@@ -275,6 +278,10 @@ def _classify_parenthetical(paren_text: str) -> str:
 
     # Stage directions: no emotional punctuation, describe physical actions
     has_emotional_punct = bool(_re.search(r"[！!？?…….]", inner))
+    _ASIDE_MARKERS = ("低声", "小声", "轻声", "悄声", "耳语", "私语", "心想", "心中", "内心", "自言自语")
+    if any(marker in inner for marker in _ASIDE_MARKERS):
+        return "aside"
+
     if not has_emotional_punct:
         # Short action descriptions
         _ACTION_VERBS = ("将", "把", "砸", "拉", "推", "走", "跑", "跳", "举",
@@ -296,8 +303,10 @@ def _extract_parentheticals(text: str) -> dict:
 
         {
             "has_paren": bool,
-            "paren_type": "direction" | "aside" | None,
+            "paren_type": "direction" | "aside" | "mixed" | None,
             "paren_text": str | None,
+            "direction_paren_text": str | None,
+            "aside_paren_text": str | None,
             "clean_text": str,          # text with parens stripped
         }
     """
@@ -307,30 +316,42 @@ def _extract_parentheticals(text: str) -> dict:
             "has_paren": False,
             "paren_type": None,
             "paren_text": None,
+            "direction_paren_text": None,
+            "aside_paren_text": None,
             "clean_text": text,
         }
 
-    # Classify each parenthetical; use the most "significant" type
-    types = [_classify_parenthetical(m) for m in matches]
-    paren_type = "aside" if "aside" in types else "direction"
+    direction_matches: list[str] = []
+    aside_matches: list[str] = []
+    for match in matches:
+        if _classify_parenthetical(match) == "direction":
+            direction_matches.append(match)
+        else:
+            aside_matches.append(match)
+
+    if direction_matches and aside_matches:
+        paren_type = "mixed"
+    elif aside_matches:
+        paren_type = "aside"
+    else:
+        paren_type = "direction"
 
     # Remove all parentheticals for clean TTS text
     clean = _PAREN_RE.sub("", text).strip()
     # Collapse multiple spaces left by removed parens
     clean = _re.sub(r" {2,}", " ", clean)
 
-    # If the ENTIRE text was inside parens, clean_text will be empty;
-    # in that case keep the inner text (it IS the dialogue — an aside)
-    if not clean:
-        inner = text.strip("()（）").strip()
-        if inner:
-            clean = inner
-            paren_type = "aside"
+    # If the entire text was inside parens, keep only aside content as speech.
+    # Pure directions should become narration and skip the dialogue.
+    if not clean and aside_matches:
+        clean = " ".join(m.strip("()（）").strip() for m in aside_matches if m.strip("()（）").strip())
 
     return {
         "has_paren": True,
         "paren_type": paren_type,
         "paren_text": " | ".join(matches),
+        "direction_paren_text": " | ".join(direction_matches) if direction_matches else None,
+        "aside_paren_text": " | ".join(aside_matches) if aside_matches else None,
         "clean_text": clean,
     }
 
@@ -379,18 +400,24 @@ def _analyze_speaker(raw_speaker: str) -> dict:
 
 
 def _direction_to_narration(paren_text: str, attributed_speaker: str) -> str:
-    """Convert a parenthetical stage direction to a narration sentence.
+    """Convert parenthetical stage directions to narration sentences.
 
     e.g. ``"(将盾牌狠狠砸入地面)"`` + ``"盾卫"``
       → ``"盾卫将盾牌狠狠砸入地面。"``
     """
-    inner = paren_text.strip("()（）").strip()
-    if not inner:
+    parts = [part.strip("()（）").strip() for part in paren_text.split(" | ")]
+    parts = [part for part in parts if part]
+    if not parts:
         return ""
-    # Use the attributed speaker as the subject when available
+
+    subject = ""
     if attributed_speaker and attributed_speaker not in ("旁白", "？？？", "???"):
-        return f"{attributed_speaker}{inner}。"
-    return f"{inner}。"
+        subject = attributed_speaker
+
+    sentences = []
+    for part in parts:
+        sentences.append(f"{subject}{part}。" if subject else f"{part}。")
+    return "".join(sentences)
 
 
 # ── Main enrichment entry point ────────────────────────────
@@ -439,6 +466,9 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
         if _is_silence(text):
             seg["speech_prefix"] = ""
             seg["is_silence"] = True
+            seg["emotion"] = "neutral"
+            seg["emotion_source"] = "rule"
+            seg["speech_base"] = "silence"
             enriched.append(seg)
             continue
 
@@ -448,6 +478,8 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
         paren_info = _extract_parentheticals(text)
         seg["has_paren"] = paren_info["has_paren"]
         seg["paren_type"] = paren_info["paren_type"]
+        seg["direction_paren_text"] = paren_info.get("direction_paren_text")
+        seg["aside_paren_text"] = paren_info.get("aside_paren_text")
         working_text = paren_info["clean_text"]
 
         # ── Speaker identity ─────────────────────────────
@@ -460,9 +492,9 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
             last_real_speaker = spkr_info["display_name"]
 
         # ── Stage direction → narration ──────────────────
-        if paren_info["has_paren"] and paren_info["paren_type"] == "direction":
+        if paren_info["has_paren"] and paren_info.get("direction_paren_text"):
             direction_text = _direction_to_narration(
-                paren_info["paren_text"],
+                paren_info["direction_paren_text"],
                 last_real_speaker or prev_speaker or "",
             )
             if direction_text:
@@ -477,6 +509,7 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
                     "source_file": seg.get("source_file", ""),
                     "scene_id": seg.get("scene_id"),
                     "is_generated": True,
+                    "emotion_source": "generated",
                 })
 
             # If the entire text WAS the direction, skip dialogue
@@ -489,7 +522,7 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
         emotion = detect_emotion(working_text)
         is_scene_change = scene_id is not None and scene_id != prev_scene_id
 
-        if paren_info["paren_type"] == "aside":
+        if paren_info["paren_type"] in ("aside", "mixed"):
             # Override: parenthetical speech → whispered / thinking
             base = "aside"
             speaker_continue_count = 1
@@ -510,6 +543,8 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
             spkr_info["display_name"], base, emotion
         )
         seg["emotion"] = emotion
+        seg["emotion_source"] = "rule"
+        seg["speech_base"] = base
         seg["tts_text"] = working_text
 
         prev_speaker = speaker
@@ -519,7 +554,7 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
         if (
             enriched
             and not is_scene_change
-            and paren_info["paren_type"] != "aside"
+            and paren_info["paren_type"] not in ("aside", "mixed")
         ):
             last = enriched[-1]
             if (

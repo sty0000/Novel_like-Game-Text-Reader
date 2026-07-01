@@ -235,6 +235,7 @@ python scripts/parse_story.py txt/ --output-dir parsed/
 | 场景切换 | 第一人用"开口道" | "曼弗雷德开口道：" |
 | 括号动作 `(砸入地面)` | **插入旁白段**，叙述动作 | 旁白："盾卫将盾牌狠狠砸入地面。" |
 | 括号悄声 `（低声讨论）` | 轻声修饰前缀 | "盾卫低声惊呼：" |
+| 动作 + 悄声混用 `（拉住博士）（低声）别怕` | 动作插入旁白，低声影响对白前缀 | 旁白："阿米娅拉住博士。" + "阿米娅轻声说：别怕" |
 | 说话人 `？？？` | 身份描述 | "神秘人说：" |
 | 说话人 `name？` | 不确定身份描述 | "那个像是战士比尔的人说：" |
 | 纯 `......` 沉默 | 标记跳过，TTS 不念 | — |
@@ -252,13 +253,13 @@ python scripts/parse_story.py txt/ --output-dir parsed/
 | `retort` | A→B→A 且有反驳信号 | "推进之王反驳道：" |
 | `aside` | 括号轻声/内心独白 | "推进之王轻声说：" |
 
-每种基础语式 × 20 种情绪 = **120 种前缀组合**，例如：
+每种基础语式 × 当前规则标签 = 一组可离线复现的前缀组合，例如：
 
 - "推进之王愤怒的反驳："
 - "阿米娅低声惊呼："
 - "曼弗雷德沉吟道："
 
-### 情绪标签（20 类）
+### 情绪标签（规则版 18 类）
 
 | 标签 | 含义 | 触发示例 |
 | --- | --- | --- |
@@ -279,9 +280,7 @@ python scripts/parse_story.py txt/ --output-dir parsed/
 | `gentle` | 温柔/安慰 | 没事的 / 有我在 |
 | `urgent` | 急切/紧迫 | 快走 / 来不及了 |
 | `desperate` | 绝望 | 一切都完了 / 没救了 |
-| `relieved` | 释然/松了口气 | 幸好 / 终于 / 放心了 |
 | `serious` | 严肃/庄重 | 我以…起誓 / 郑重 |
-| `disgusted` | 厌恶/反感 | 恶心 / 别碰我 |
 
 ### 命令行（speech_modifier）
 
@@ -301,6 +300,10 @@ python scripts/speech_modifier.py parsed/story.segments.jsonl -o parsed/story.en
   "identity": "known",
   "has_paren": false,
   "paren_type": null,
+  "direction_paren_text": null,
+  "aside_paren_text": null,
+  "emotion_source": "rule",
+  "speech_base": "retort",
   "is_silence": false
 }
 ```
@@ -314,7 +317,7 @@ python scripts/speech_modifier.py parsed/story.segments.jsonl -o parsed/story.en
 ```text
 scripts/emotion_classifier/
 ├── __init__.py         # 对外接口 EmotionClassifier, detect_emotion
-├── rules.py            # 规则版 detect_emotion（12 标签 + 关键词匹配）
+├── rules.py            # 规则版 detect_emotion（18 标签 + 关键词匹配）
 ├── classifier.py       # 推理引擎：自动加载模型，无模型时回退规则
 ├── prepare_data.py     # 从 parsed JSONL 提取对白 → CSV 标注格式
 ├── train.py            # 微调 bert-base-chinese 并导出 ONNX
@@ -327,7 +330,7 @@ scripts/emotion_classifier/
 from scripts.emotion_classifier import EmotionClassifier
 
 clf = EmotionClassifier()           # 有模型用模型，没有回退规则
-clf = EmotionClassifier(model_dir=None)  # 强制只用规则
+clf = EmotionClassifier(model_dir="")  # 强制只用规则
 emotion = clf.predict("你这说的是什么话？！")  # → "shock_question"
 ```
 
