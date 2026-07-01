@@ -10,7 +10,7 @@
     # -> "shock_question"
 
     # 强制只使用规则（不加载模型）
-    clf = EmotionClassifier(model_dir=None)
+    clf = EmotionClassifier(model_dir="")
 """
 
 from __future__ import annotations
