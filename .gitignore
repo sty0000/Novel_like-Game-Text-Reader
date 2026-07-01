@@ -25,9 +25,14 @@ audio/
 *.flac
 *.txt
 *.csv
+!char_expression_map.csv
+!sprite_emotions.csv
 
 # Trained ML model checkpoints (can be large; users re-train from scratch)
 scripts/emotion_classifier/model/checkpoints/
+
+# Downloaded character sprite images (co-worker runs classify_sprites.py --all)
+sprites/
 
 # Tool caches
 .pytest_cache/

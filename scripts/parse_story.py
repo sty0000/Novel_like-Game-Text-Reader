@@ -17,6 +17,7 @@ BRACKET_SPEECH_RE = re.compile(
 DIRECTIVE_RE = re.compile(r'^\[(?P<kind>[A-Za-z]+)(?:\((?P<params>.*)\))?\]\s*(?P<trailing>.*)$')
 PARAM_RE = re.compile(r'(\w+)\s*=\s*(?:"(?P<quoted>[^"]*)"|(?P<bare>[^,\)]+))')
 SCENE_SWITCH_KINDS = {"header", "background", "image"}
+CHARACTER_KINDS = {"character"}
 
 
 @dataclass
@@ -44,6 +45,7 @@ class Segment:
     scene_ref: str
     scene_start_line: int
     source_kind: str = "prts_raw"
+    sprite_code: str = ""  # [Character] 标签的差分码，如 char_148_nearl_1#4
 
 
 def iter_input_files(inputs: list[str]):
@@ -135,6 +137,7 @@ def flush_segment(
     line_end: Optional[int],
     source_file: str,
     scene: SceneState,
+    current_sprite: str = "",
 ) -> int:
     if not role or not speaker or not lines or line_start is None or line_end is None:
         lines.clear()
@@ -161,6 +164,7 @@ def flush_segment(
             scene_label=scene.scene_label,
             scene_ref=scene.scene_ref,
             scene_start_line=scene.scene_start_line,
+            sprite_code=current_sprite,
         )
     )
     lines.clear()
@@ -175,6 +179,7 @@ def extract_segments(text: str, story_title: str, source_file: str) -> list[Segm
     pending_start: Optional[int] = None
     pending_end: Optional[int] = None
     scene = SceneState()
+    current_sprite: str = ""
 
     def flush() -> None:
         nonlocal pending_role, pending_speaker, pending_start, pending_end
@@ -189,6 +194,7 @@ def extract_segments(text: str, story_title: str, source_file: str) -> list[Segm
             pending_end,
             source_file,
             scene,
+            current_sprite,
         )
         pending_role = None
         pending_speaker = None
@@ -204,6 +210,16 @@ def extract_segments(text: str, story_title: str, source_file: str) -> list[Segm
 
         if is_template_line(line):
             flush()
+            continue
+
+        # 检测 [Character] 标签，更新当前差分
+        if line.startswith("[Character("):
+            directive = parse_directive(line)
+            if directive and directive["kind_lower"] in CHARACTER_KINDS:
+                params = directive_params(directive["params_json"])
+                sprite = params.get("name", "")
+                if sprite:
+                    current_sprite = sprite
             continue
 
         bracket_match = BRACKET_SPEECH_RE.match(line)

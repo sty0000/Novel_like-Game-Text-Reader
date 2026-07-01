@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
@@ -16,6 +17,89 @@ from scripts.emotion_classifier.rules import detect_emotion
 #_classifier = EmotionClassifier()
 #def detect_emotion(text: str) -> str:
     #return _classifier.predict(text)
+
+
+# ── 差分图情绪缓存 ──────────────────────────────────────
+
+_SPRITE_CACHE: dict[str, tuple[str, float]] = {}
+_SPRITE_CACHE_LOADED = False
+
+
+def _load_sprite_cache() -> None:
+    global _SPRITE_CACHE_LOADED
+    if _SPRITE_CACHE_LOADED:
+        return
+    path = Path("sprite_emotions.csv")
+    if path.exists():
+        with path.open(encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                code = row.get("code", "").strip()
+                emo = row.get("emotion", "").strip()
+                conf = float(row.get("confidence", 0))
+                if code and emo:
+                    _SPRITE_CACHE[code] = (emo, conf)
+        print(f"已加载 {len(_SPRITE_CACHE)} 条差分图情绪缓存", file=sys.stderr)
+    _SPRITE_CACHE_LOADED = True
+
+
+def _sprite_emotion(sprite_code: str) -> Optional[tuple[str, float]]:
+    """查 sprite_emotions.csv 获取 (图片情绪, 置信度)。"""
+    if not sprite_code:
+        return None
+    _load_sprite_cache()
+    return _SPRITE_CACHE.get(sprite_code)
+
+
+# 7 类 FER 面部表情 → 相容的 18 类文本情绪
+# neutral 面部表情：所有情绪都可能，不加任何权重
+# 非 neutral 面部表情：只对"说得通"的情绪给加成
+_FACE_COMPATIBLE: dict[str, set[str]] = {
+    "neutral":   set(),  # 中性脸 → 不加成，文本说了算
+    "happy":     {"happy", "laugh", "gentle", "relieved"},
+    "sad":       {"sad", "sigh", "desperate", "gentle"},
+    "angry":     {"angry", "determined", "arrogant", "serious"},
+    "surprise":  {"shocked", "shock_question", "fearful"},
+    "fear":      {"fearful", "desperate", "urgent"},
+    "disgust":   {"angry", "arrogant", "serious"},
+}
+
+
+def _combine_emotions(text_emo: str, sprite_emo: Optional[str],
+                      confidence: float = 0.0) -> str:
+    """文本情绪 + 差分图面部表情 + 置信度 → 加权融合。
+
+    规则（按优先级）：
+    - 无差分图或置信度 < 0.35 → 文本决定（脸不可靠）
+    - 面部中性 → 不加成，文本决定
+    - 高置信度 (≥0.6) + 相容 → 用图片信号（脸很明显）
+    - 高置信度 (≥0.6) + 文本中性 → 用图片信号
+    - 面部与文本相容 → 确认，用文本
+    - 冲突 → 文本优先
+    """
+    if not sprite_emo or confidence < 0.35:
+        return text_emo
+
+    # 中性脸不加成任何情绪
+    if sprite_emo == "neutral":
+        return text_emo
+
+    # 高置信度：图片信号比文本更有参考价值
+    if confidence >= 0.6:
+        # 文本中性 → 采纳图片
+        if text_emo == "neutral":
+            return sprite_emo
+        # 相容 → 用图片
+        if text_emo == sprite_emo or text_emo in _FACE_COMPATIBLE.get(sprite_emo, set()):
+            return sprite_emo
+
+    # 中置信度 (0.5-0.8)：相容则确认，冲突则文本优先
+    if text_emo == sprite_emo or text_emo in _FACE_COMPATIBLE.get(sprite_emo, set()):
+        return text_emo
+
+    if text_emo == "neutral":
+        return sprite_emo
+
+    return text_emo
 
 
 # ── Constants ──────────────────────────────────────────────
@@ -518,8 +602,16 @@ def enrich_segments(segments: list[dict]) -> list[dict]:
                 speaker_continue_count = 0
                 continue
 
-        # ── Emotion & base classification ────────────────
+        # ── Emotion: text + sprite fusion ────────────────
         emotion = detect_emotion(working_text)
+        # 如果有差分图情绪，加权融合
+        sprite_code = seg.get("sprite_code", "")
+        if sprite_code:
+            result = _sprite_emotion(sprite_code)
+            if result:
+                sprite_emo, confidence = result
+                emotion = _combine_emotions(emotion, sprite_emo, confidence)
+
         is_scene_change = scene_id is not None and scene_id != prev_scene_id
 
         if paren_info["paren_type"] in ("aside", "mixed"):
