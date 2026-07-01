@@ -336,6 +336,10 @@ def main() -> int:
         return 1
 
     print(f"已加载 {len(texts)} 条标注数据", file=sys.stderr)
+    if len(texts) < 2:
+        print("错误: 训练至少需要 2 条有效标注数据，以便划分训练集和验证集", file=sys.stderr)
+        return 1
+
     print(f"标签分布:", file=sys.stderr)
     for label in EMOTION_LABELS:
         count = (labels == LABEL2ID[label]).sum()
@@ -344,6 +348,7 @@ def main() -> int:
     # 划分验证集
     indices = np.random.RandomState(args.seed).permutation(len(texts))
     val_size = max(1, int(len(texts) * args.val_split))
+    val_size = min(val_size, len(texts) - 1)
     train_indices = indices[val_size:]
     val_indices = indices[:val_size]
 
@@ -380,6 +385,9 @@ def main() -> int:
             export_onnx=args.export_onnx,
         )
     except ImportError as e:
+        print(f"错误: {e}", file=sys.stderr)
+        return 1
+    except ValueError as e:
         print(f"错误: {e}", file=sys.stderr)
         return 1
 

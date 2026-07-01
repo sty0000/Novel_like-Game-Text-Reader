@@ -32,11 +32,14 @@ def iter_dialogues(path: Path) -> list[dict]:
     """从 JSONL 文件中提取所有对白段。"""
     dialogues: list[dict] = []
     with path.open("r", encoding="utf-8") as f:
-        for line in f:
+        for line_number, line in enumerate(f, start=1):
             line = line.strip()
             if not line:
                 continue
-            seg = json.loads(line)
+            try:
+                seg = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"{path} 第 {line_number} 行不是有效 JSON: {error}") from error
             if seg.get("role") != "dialogue":
                 continue
             text = (seg.get("text") or "").replace("\n", " ").strip()
@@ -95,10 +98,18 @@ def main() -> int:
             print(f"错误: 目录 {input_path} 中未找到 JSONL 文件", file=sys.stderr)
             return 1
         all_dialogues: list[dict] = []
-        for f in jsonl_files:
-            all_dialogues.extend(iter_dialogues(f))
+        try:
+            for f in jsonl_files:
+                all_dialogues.extend(iter_dialogues(f))
+        except ValueError as error:
+            print(f"错误: {error}", file=sys.stderr)
+            return 1
     else:
-        all_dialogues = iter_dialogues(input_path)
+        try:
+            all_dialogues = iter_dialogues(input_path)
+        except ValueError as error:
+            print(f"错误: {error}", file=sys.stderr)
+            return 1
 
     if not all_dialogues:
         print("错误: 未提取到任何对白", file=sys.stderr)

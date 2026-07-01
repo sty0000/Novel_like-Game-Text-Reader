@@ -27,6 +27,7 @@ from scripts.emotion_classifier.rules import EMOTION_LABELS, detect_emotion
 _MODEL = None
 _TOKENIZER = None
 _MODEL_DIR: Optional[Path] = None
+_BACKEND: Optional[str] = None
 
 
 def _find_model_dir() -> Optional[Path]:
@@ -39,7 +40,7 @@ def _find_model_dir() -> Optional[Path]:
 
 def _load_transformers(model_dir: Path):
     """尝试加载 transformers 模型和分词器。"""
-    global _MODEL, _TOKENIZER, _MODEL_DIR
+    global _MODEL, _TOKENIZER, _MODEL_DIR, _BACKEND
 
     try:
         from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
@@ -62,11 +63,12 @@ def _load_transformers(model_dir: Path):
     _MODEL = model
     _TOKENIZER = tokenizer
     _MODEL_DIR = model_dir
+    _BACKEND = "transformers"
 
 
 def _load_onnx(model_dir: Path):
     """尝试加载 ONNX 模型（轻量推理，不需要 PyTorch）。"""
-    global _MODEL, _TOKENIZER, _MODEL_DIR
+    global _MODEL, _TOKENIZER, _MODEL_DIR, _BACKEND
 
     try:
         import onnxruntime as ort
@@ -89,6 +91,7 @@ def _load_onnx(model_dir: Path):
     _MODEL = session
     _TOKENIZER = tokenizer
     _MODEL_DIR = model_dir
+    _BACKEND = "onnx"
 
 
 def load(model_dir: Optional[str] = None, prefer_onnx: bool = True) -> bool:
@@ -105,7 +108,7 @@ def load(model_dir: Optional[str] = None, prefer_onnx: bool = True) -> bool:
         ImportError: 缺少必要的依赖库。
         FileNotFoundError: 指定目录不存在或缺少模型文件。
     """
-    global _MODEL, _TOKENIZER, _MODEL_DIR
+    global _MODEL, _TOKENIZER, _MODEL_DIR, _BACKEND
 
     if model_dir is None:
         found = _find_model_dir()
@@ -113,6 +116,7 @@ def load(model_dir: Optional[str] = None, prefer_onnx: bool = True) -> bool:
             _MODEL = None
             _TOKENIZER = None
             _MODEL_DIR = None
+            _BACKEND = None
             return False
         model_dir = str(found)
 
@@ -195,15 +199,15 @@ def predict(texts: str | Sequence[str]) -> str | list[str]:
     single_input = isinstance(texts, str)
     batch = [texts] if single_input else list(texts)
 
-    global _MODEL, _TOKENIZER
+    global _MODEL, _TOKENIZER, _BACKEND
 
     if _MODEL is not None and _TOKENIZER is not None:
-        # 根据模型类型选择推理路径
-        try:
-            import onnxruntime
+        if _BACKEND == "onnx":
             results = _predict_onnx(batch)
-        except ImportError:
+        elif _BACKEND == "transformers":
             results = _predict_transformers(batch)
+        else:
+            results = [detect_emotion(t) for t in batch]
     else:
         # 回退到规则
         results = [detect_emotion(t) for t in batch]
