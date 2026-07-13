@@ -34,6 +34,9 @@ scripts/emotion_classifier/model/checkpoints/
 # Downloaded character sprite images (co-worker runs classify_sprites.py --all)
 sprites/
 
+# CosyVoice cloned repo (co-worker clones their own)
+CosyVoice/
+
 # Tool caches
 .pytest_cache/
 .mypy_cache/
