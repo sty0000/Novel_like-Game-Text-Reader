@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -37,6 +38,18 @@ DEFAULT_COSY_MODEL = "CosyVoice/pretrained_models/CosyVoice2-0.5B"
 DEFAULT_COSY_MAP = "voice_map.json"
 DEFAULT_NARRATOR_VOICE = "zh-CN-YunjianNeural"
 DEFAULT_EDGE_VOICE = "zh-CN-XiaoxiaoNeural"
+
+
+def open_directory(path: Path) -> None:
+    """用当前平台的文件管理器打开目录。"""
+    path.mkdir(parents=True, exist_ok=True)
+    resolved = path.resolve()
+    if sys.platform.startswith("win"):
+        os.startfile(str(resolved))  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.run(["open", str(resolved)], check=True)
+    else:
+        subprocess.run(["xdg-open", str(resolved)], check=True)
 
 
 # ── 后台处理线程 ──────────────────────────────────────
@@ -155,7 +168,7 @@ class PipelineThread(threading.Thread):
 
             raise CrawlError(f"未知 TTS 引擎: {self.tts_engine}")
 
-        except (CrawlError, OSError, json.JSONDecodeError) as exc:
+        except (CrawlError, OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
             self._error(str(exc))
         except Exception as exc:
             self._error(f"未预期的错误: {exc}")
@@ -173,6 +186,7 @@ class StoryReaderApp:
         self._entries: list[StoryEntry] = []
         self._filtered: list[StoryEntry] = []
         self._processing = False
+        self._loading_catalog = False
 
         self._build_ui()
         self._load_catalog()
@@ -187,9 +201,11 @@ class StoryReaderApp:
         ttk.Label(top_bar, text="🔍").pack(side=tk.LEFT)
         self._search_var = tk.StringVar()
         self._search_var.trace_add("write", lambda *_: self._apply_filter())
-        ttk.Entry(top_bar, textvariable=self._search_var).pack(
-            side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 8))
-        ttk.Button(top_bar, text="刷新列表", command=self._load_catalog).pack(side=tk.RIGHT)
+        search_entry = ttk.Entry(top_bar, textvariable=self._search_var)
+        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 8))
+
+        self._refresh_btn = ttk.Button(top_bar, text="刷新列表", command=self._load_catalog)
+        self._refresh_btn.pack(side=tk.RIGHT)
 
         # 中部：剧情列表
         list_frame = ttk.Frame(self.root)
@@ -299,15 +315,21 @@ class StoryReaderApp:
         self._generate_btn.pack(side=tk.RIGHT, padx=(8, 0))
 
         self._open_btn = ttk.Button(
-            action_row, text="打开音频目录",
-            command=lambda: Path(DEFAULT_AUDIO_DIR).mkdir(parents=True, exist_ok=True)
-                or __import__("os").startfile(str(Path(DEFAULT_AUDIO_DIR).resolve())))
+            action_row,
+            text="打开音频目录",
+            command=self._open_audio_dir,
+        )
         self._open_btn.pack(side=tk.RIGHT)
 
     # ── 数据 ─────────────────────────────────────────
 
     def _load_catalog(self):
+        """后台加载剧情目录。"""
+        if self._loading_catalog:
+            return
+        self._loading_catalog = True
         self._set_status("正在从 PRTS wiki 加载剧情目录…")
+        self._refresh_btn.configure(state=tk.DISABLED)
         self._generate_btn.configure(state=tk.DISABLED)
         threading.Thread(target=self._do_load_catalog, daemon=True).start()
 
@@ -322,15 +344,21 @@ class StoryReaderApp:
             return
         self.root.after(0, lambda: self._on_load_success(entries))
 
-    def _on_load_success(self, entries):
+    def _on_load_success(self, entries: list[StoryEntry]):
+        self._loading_catalog = False
+        self._refresh_btn.configure(state=tk.NORMAL)
         self._entries = entries
         self._filtered = entries
         self._refresh_list()
-        self._generate_btn.configure(state=tk.NORMAL)
-        self._set_status(f"已加载 {len(entries)} 条，双击或选中 → ▶ 生成语音")
+        if not self._processing:
+            self._generate_btn.configure(state=tk.NORMAL)
+        self._set_status(f"已加载 {len(entries)} 条剧情，双击或选中后点击按钮生成语音")
 
-    def _on_load_error(self, msg):
-        self._generate_btn.configure(state=tk.NORMAL)
+    def _on_load_error(self, msg: str):
+        self._loading_catalog = False
+        self._refresh_btn.configure(state=tk.NORMAL)
+        if not self._processing:
+            self._generate_btn.configure(state=tk.NORMAL)
         self._set_status(f"加载失败: {msg}")
         messagebox.showerror("加载失败", f"无法加载剧情目录：\n{msg}")
 
@@ -403,7 +431,13 @@ class StoryReaderApp:
         self._set_status(f"❌ 失败: {msg}")
         messagebox.showerror("生成失败", msg)
 
-    def _set_status(self, text):
+    def _open_audio_dir(self):
+        try:
+            open_directory(Path(DEFAULT_AUDIO_DIR))
+        except (OSError, subprocess.CalledProcessError) as exc:
+            messagebox.showerror("打开失败", f"无法打开音频目录：\n{exc}")
+
+    def _set_status(self, text: str):
         self._status_label.configure(text=text)
 
 
