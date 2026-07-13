@@ -124,31 +124,132 @@ raw wikitext
 
 ## TTS 方案
 
-| 方案 | 适合阶段 | 优点 | 注意事项 |
-| --- | --- | --- | --- |
-| [Edge TTS](https://github.com/rany2/edge-tts) | 第一阶段 demo | 接入简单、无需本地模型、中文 voice 可用 | 依赖在线服务，不适合完全离线 |
-| [ChatTTS](https://github.com/2noise/ChatTTS) | 对话实验 | 面向中英文对话，适合探索自然对白 | 本地环境和生成稳定性需要单独验证 |
-| [CosyVoice](https://github.com/FunAudioLLM/CosyVoice) | 后续高质量本地化 | 多语种、零样本能力，适合角色音色探索 | 推理环境较重 |
-| [Fish Speech](https://github.com/fishaudio/fish-speech) | 后续本地流水线 | 开源多语种 TTS/语音生成能力强 | 需要模型与推理资源 |
-| [IndexTTS](https://github.com/index-tts/index-tts) | 后续中文高质量候选 | 面向中文/英文的高质量 TTS 方向 | 接入方式需按官方项目更新验证 |
-| [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | 后续候选 | 多语种和自然语言控制潜力 | 需确认具体 API 或本地部署流程 |
+| 方案 | 状态 | 说明 |
+| --- | --- | --- |
+| **CosyVoice** | ✅ 当前默认 | zero-shot 声音克隆，多角色切换，旁白自动拆分 |
+| Edge TTS | 兜底 | 旁白音色 + 未配置角色回退 |
 
-建议优先用 Edge TTS 打通工程闭环，再根据质量、离线需求和角色音色需求接入本地模型。
+## CosyVoice 零样本语音合成（推荐）
 
-## Edge TTS 示例脚本
+`scripts/tts_cosyvoice.py` 根据 `voice_map.json` 为每个角色做 zero-shot 声音克隆，支持自动重试。对白和旁白前缀自动拆分——"推进之王说："由旁白音色朗读，对白内容由角色克隆音色朗读。
 
-`scripts/tts_edge.py` 可以把普通文本或 JSONL 中的 `text` 字段合成为音频。
+### 环境配置
 
-### TXT 输入
+CosyVoice 需要 **Python 3.10**，与项目主环境（Python 3.13）隔离。使用 conda 创建独立环境：
 
 ```powershell
-python scripts/tts_edge.py --input samples/W2G_BEG.raw.txt --output audio/W2G_BEG.mp3 --voice zh-CN-XiaoxiaoNeural
+# 1. 创建 cosy 环境
+conda create -n cosy python=3.10 -y
+conda activate cosy
+
+# 2. 克隆 CosyVoice
+git clone https://github.com/FunAudioLLM/CosyVoice.git
+cd CosyVoice
+
+# 3. 安装依赖
+pip install setuptools wheel -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+
+# 4. 安装 Matcha-TTS（CosyVoice 依赖）
+cd tools/Matcha-TTS
+pip install -e . -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+cd ../..
+
+# 5. 下载预训练模型（二选一）
+# CosyVoice2-0.5B（推荐，质量更好）
+python -c "from modelscope import snapshot_download; snapshot_download('iic/CosyVoice2-0.5B', local_dir='pretrained_models/CosyVoice2-0.5B')"
+# 或 CosyVoice-300M（更轻量）
+python -c "from modelscope import snapshot_download; snapshot_download('iic/CosyVoice-300M', local_dir='pretrained_models/CosyVoice-300M')"
+
+cd ..
 ```
 
-### JSONL 输入
+### 测试环境
 
 ```powershell
-python scripts/tts_edge.py --format jsonl --input segments/W2G_BEG.jsonl --output audio/W2G_BEG.mp3 --voice zh-CN-YunjianNeural
+conda activate cosy
+python scripts/test_cosyvoice.py
+```
+
+生成 `audio/diag_cosyvoice.wav`（克隆音色）和 `audio/diag_edge.wav`（Edge TTS），对比确认克隆生效。
+
+### 准备角色音频
+
+每个角色 3-5 段短句（WAV 格式，无 BGM，2-8 秒），放入对应目录：
+
+```text
+local_voice_data/
+  amiya/wavs/       001.wav  002.wav  003.wav
+  chen/wavs/        001.wav  002.wav  003.wav
+  ...
+```
+
+每个目录下创建 `transcripts.csv`，记录每段音频对应的文字：
+
+```csv
+file,text
+001.wav,我一直觉得你们罗德岛很可疑，现在也一样。
+002.wav,……
+```
+
+### 配置 voice_map.json
+
+编辑项目根目录下的 `voice_map.json`，把角色名映射到音频目录：
+
+```json
+{
+  "阿米娅": {
+    "engine": "cosyvoice",
+    "voice_dir": "local_voice_data/amiya",
+    "profile": "amiya_v1"
+  },
+  "旁白": {
+    "engine": "edge-tts",
+    "voice": "zh-CN-YunjianNeural"
+  }
+}
+```
+
+未配置的角色自动用 Edge TTS 兜底。
+
+### 合成
+
+```powershell
+# reader 环境一键完成（parse + enrich + cosyvoice 合成）
+conda activate reader
+python story_reader.py "0-10 困境/BEG"
+
+# 或手动分步
+conda activate reader
+python story_reader.py "0-10 困境/BEG" --tts skip     # 只解析，不合成
+conda activate cosy
+python scripts/tts_cosyvoice.py --input parsed/0-10_困境_BEG.segments.jsonl --output audio/test.mp3
+```
+
+### 引擎切换
+
+```powershell
+--tts cosyvoice    # CosyVoice（默认）
+--tts edge         # Edge TTS 单音色
+--tts skip         # 只解析不合成
+```
+
+### 参数
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--cosy-python` | `D:/Anaconda/envs/cosy/python.exe` | cosy 环境 Python 路径 |
+| `--cosyvoice-model-dir` | `CosyVoice/pretrained_models/CosyVoice2-0.5B` | 预训练模型目录 |
+| `--cosyvoice-map` | `voice_map.json` | 角色→音色映射 |
+| `--narrator-voice` | `zh-CN-YunjianNeural` | 旁白音色 |
+| `--narrator-pause` | `250` | 旁白与对白间停顿(ms) |
+
+## Edge TTS 脚本（单音色）
+
+`scripts/tts_edge.py` 用单一音色合成文本或 JSONL。
+
+```powershell
+python scripts/tts_edge.py --format jsonl --input parsed/story.jsonl --output audio/story.mp3 --voice zh-CN-YunjianNeural
 ```
 
 常用参数：

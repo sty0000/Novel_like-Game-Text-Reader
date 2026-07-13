@@ -1,0 +1,31 @@
+{
+  "旁白": {
+    "engine": "edge-tts",
+    "voice": "zh-CN-YunjianNeural",
+    "notes": "旁白用 Edge TTS 兜底，音色稳重"
+  },
+  "阿米娅": {
+    "engine": "cosyvoice",
+    "voice_dir": "local_voice_data/amiya",
+    "profile": "amiya_v1",
+    "notes": "填入参考音频目录和 GPT-SoVITS 模型配置"
+  },
+  "凯尔希": {
+    "engine": "cosyvoice",
+    "voice_dir": "local_voice_data/kaltsit",
+    "profile": "kaltsit_v1",
+    "notes": "填入参考音频目录和 GPT-SoVITS 模型配置"
+  },
+  "推进之王": {
+    "engine": "cosyvoice",
+    "voice_dir": "local_voice_data/siege",
+    "profile": "siege_v1",
+    "notes": "填入参考音频目录"
+  },
+  "陈": {
+    "engine": "cosyvoice",
+    "voice_dir": "local_voice_data/chen",
+    "profile": "chen_v1",
+    "notes": "填入参考音频目录"
+  }
+}
